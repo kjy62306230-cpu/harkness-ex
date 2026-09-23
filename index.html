@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>하크니스 시험지 분석기</title>
+<link rel="stylesheet" href="css/app.css?v=20260923d">
+</head>
+<body>
+<header class="top">
+  <button id="back" class="backbtn" title="뒤로" hidden>‹</button>
+  <span class="brand">하크니스 시험지 분석기</span>
+  <nav id="nav"></nav>
+  <span class="grow"></span>
+  <span id="who" class="muted"></span>
+  <button id="logout" hidden>로그아웃</button>
+</header>
+<main id="app"></main>
+<div id="capture-root" aria-hidden="true"></div>
+
+<script type="module">
+import { session, api, $, esc, toast, errMsg } from "./js/api.js?v=20260923d";
+import { renderLogin, renderExamList, renderExam, renderStudents } from "./js/exam.js?v=20260923d";
+
+const app = $("#app");
+
+function nav() {
+  const u = session.user();
+  $("#who").textContent = u ? u.name + " · " + (u.role === "admin" ? "관리자" : "선생님") : "";
+  $("#logout").hidden = !u;
+  $("#back").hidden = !u || /^#\/(exams)?$/.test(location.hash || "");
+  const cur = (location.hash || "#/exams").split("/")[1] || "exams";
+  const btn = (h, label, on) => '<a class="navbtn' + (on ? " on" : "") + '" href="#/' + h + '">' + label + "</a>";
+  $("#nav").innerHTML = u
+    ? btn("exams", "📋 시험", cur === "exams" || cur === "exam") + (u.role === "admin" ? btn("students", "👥 학생 관리", cur === "students") : "")
+    : "";
+}
+
+async function route() {
+  nav();
+  const hash = location.hash || "#/exams";
+  const parts = hash.slice(2).split("/");
+  const u = session.user();
+  if (!u && parts[0] !== "login") { location.hash = "#/login"; return; }
+  try {
+    if (parts[0] === "login") return renderLogin(app);
+    if (parts[0] === "exams") return await renderExamList(app);
+    if (parts[0] === "exam" && parts[1]) return await renderExam(app, parts[1], parts[2] || "items", parts.slice(3));
+    if (parts[0] === "students") return await renderStudents(app);
+    location.hash = "#/exams";
+  } catch (e) {
+    app.innerHTML = '<div class="err-box">' + esc(errMsg(e)) + '</div><button onclick="location.reload()">다시 시도</button>';
+  }
+}
+
+$("#back").addEventListener("click", () => { if (history.length > 1) history.back(); else location.hash = "#/exams"; });
+$("#logout").addEventListener("click", async () => {
+  try { await api("ex-auth", { action: "logout" }); } catch {}
+  session.clear(); nav(); location.hash = "#/login";
+});
+window.addEventListener("hashchange", route);
+window.addEventListener("error", (e) => toast("화면 오류: " + (e.message || ""), "err"));
+route();
+</script>
+</body>
+</html>
